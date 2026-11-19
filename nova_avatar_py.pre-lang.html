@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Orb Python</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one screen. A dark 3D stage on top, chat underneath. The avatar is a glowing orb. */
+  :root {
+    --bg: #f3efea;
+    --fg: #2a2522;
+    --muted: #6f6760;
+    --panel: #fffdfa;
+    --line: #ddd5cc;
+    --accent: #d99a2b;
+    --accent-fg: #2a1d08;
+    --link: #8a5a00;
+    --stage-a: #7d736c;
+    --stage-b: #443d39;
+    --bubble-nova: #ece5dc;
+    --bubble-you: #d99a2b;
+    --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1d1a18;
+      --fg: #f1ebe4;
+      --muted: #a39a91;
+      --panel: #2a2623;
+      --line: #3e3833;
+      --accent: #e5a93a;
+      --accent-fg: #2a1d08;
+      --link: #f0c36a;
+      --stage-a: #6b625b;
+      --stage-b: #35302d;
+      --bubble-nova: #38322e;
+      --bubble-you: #e5a93a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1d1a18;
+    --fg: #f1ebe4;
+    --muted: #a39a91;
+    --panel: #2a2623;
+    --line: #3e3833;
+    --accent: #e5a93a;
+    --accent-fg: #2a1d08;
+    --link: #f0c36a;
+    --stage-a: #6b625b;
+    --stage-b: #35302d;
+    --bubble-nova: #38322e;
+    --bubble-you: #e5a93a;
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; margin: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+    box-sizing: border-box;
+  }
+  .app {
+    height: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+  .stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 220px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, var(--stage-a), var(--stage-b));
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .stage canvas:active { cursor: grabbing; }
+  .stage.drop { outline: 3px dashed var(--accent); outline-offset: -8px; }
+  .name-tag {
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    color: #fff;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 6px rgba(0,0,0,.35);
+    pointer-events: none;
+  }
+  .name-tag small {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: .75;
+  }
+  .status {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    font-size: 12px;
+    color: #fff;
+    opacity: .85;
+    text-shadow: 0 1px 4px rgba(0,0,0,.45);
+    pointer-events: none;
+  }
+  .pick {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #fff;
+    background: rgba(20, 16, 14, .35);
+  }
+  .pick p { margin: 0; max-width: 34ch; line-height: 1.45; font-size: 14px; }
+  .pick a { color: var(--link); background: #fff; padding: 0 4px; border-radius: 4px; text-decoration: none; font-weight: 600; }
+  .pick button {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 600;
+    padding: 13px 24px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+  }
+  .fail { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: #fff; margin: 0; }
+
+  .panel {
+    flex: 0 0 auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .log { height: 104px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+  .msg { max-width: 88%; padding: 7px 11px; border-radius: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+  .msg.nova { background: var(--bubble-nova); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.you { background: var(--bubble-you); color: var(--accent-fg); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip, .tool {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .chip:hover, .tool:hover { border-color: var(--accent); }
+  .tool { color: var(--muted); }
+  .tool[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+  .spacer { flex: 1 1 auto; }
+  form { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .send {
+    font: inherit;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 0;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .stage canvas { cursor: default; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="name-tag">Nova<small>Your AI friend</small></div>
+    <div class="status" id="status"></div>
+  </div>
+  <div class="panel">  </div>
+  <div class="panel">
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="chips">
+      <button class="chip" type="button" data-say="Tell me a joke">Tell a joke</button>
+      <button class="chip" type="button" data-say="Give me a space fact">Space fact</button>
+      <button class="chip" type="button" data-say="Dance">Dance</button>
+      <span class="spacer"></span>
+      <button class="tool" id="micBtn" type="button" aria-pressed="false">Tap to talk</button>
+      <button class="tool" id="wakeBtn" type="button" aria-pressed="false">Hey Nova: off</button>
+      <button class="tool" id="muteBtn" type="button" aria-pressed="false">Voice on</button>
+    </div>
+    <form id="form" autocomplete="off">
+      <input type="text" id="msg" placeholder="Say something to Nova" aria-label="Message to Nova">
+      <button class="send" type="submit">Send</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var statusEl = document.getElementById('status');
+  if (typeof THREE === 'undefined') {
+    stage.insertAdjacentHTML('beforeend', '<p class="fail">The 3D tools could not load. Check your internet connection and reload the page.</p>');
+    return;
+  }
+
+  /* ---------- scene ---------- */
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f78, 0.9));
+  var key = new THREE.DirectionalLight(0xfff1dc, 1.0);
+  key.position.set(1.5, 2.5, 3);
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0xbcd0ff, 0.4);
+  rim.position.set(-2, 1.5, -2);
+  scene.add(rim);
+
+  var holder = new THREE.Group();   // spins when dragged
+  scene.add(holder);
+
+  var greeted = false;
+  var focus = { y: 0, viewH: 2.6 };
+
+  /* ---------- sizing and framing ---------- */
+  function placeCamera() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    var halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    var distH = focus.viewH / (2 * halfTan);
+    var distW = (focus.viewH * 0.62) / (2 * halfTan * camera.aspect);
+    var dist = Math.max(distH, distW);
+    camera.position.set(0, focus.y, dist);
+    camera.lookAt(0, focus.y, 0);
+    camera.near = dist / 50;
+    camera.far = dist * 50;
+    camera.updateProjectionMatrix();
+  }
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    placeCamera();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+
+  /* ---------- status line ---------- */
+  var sayTimer = null;
+  function say(msg) {
+    statusEl.textContent = msg;
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(function () { statusEl.textContent = ''; }, 6000);
+  }
+
+  /* ---------- the orb ---------- */
+  var orbUniforms = {
+    uTime: { value: 0 },
+    uLevel: { value: 0 },
+    uColor: { value: new THREE.Color(0x5b7cff) },
+    uColor2: { value: new THREE.Color(0xb48cff) }
+  };
+  var orb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 96, 96),
+    new THREE.ShaderMaterial({
+      uniforms: orbUniforms,
+      vertexShader: [
+        'uniform float uTime; uniform float uLevel;',
+        'varying vec3 vN; varying vec3 vV;',
+        'void main() {',
+        '  vec3 p = position;',
+        '  float d = sin(p.x * 3.0 + uTime * 1.5) * sin(p.y * 3.0 + uTime * 1.2) * sin(p.z * 3.0 + uTime * 1.8);',
+        '  p += normal * d * (0.05 + uLevel * 0.22);',
+        '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+        '  vN = normalize(normalMatrix * normal);',
+        '  vV = normalize(-mv.xyz);',
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor; uniform vec3 uColor2; uniform float uLevel; uniform float uTime;',
+        'varying vec3 vN; varying vec3 vV;',
+        'void main() {',
+        '  float f = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 2.0);',
+        '  float swirl = 0.5 + 0.5 * sin(vN.y * 5.0 + vN.x * 3.0 + uTime * 1.3);',
+        '  vec3 col = mix(uColor, uColor2, swirl * 0.6 + f * 0.6);',
+        '  col = col * (0.55 + 0.5 * uLevel) + f * (0.7 + uLevel);',
+        '  gl_FragColor = vec4(col, 1.0);',
+        '}'
+      ].join('\n')
+    })
+  );
+  holder.add(orb);
+
+  // soft glow behind the orb
+  var glowCanvas = document.createElement('canvas');
+  glowCanvas.width = glowCanvas.height = 128;
+  var gctx = glowCanvas.getContext('2d');
+  var grad = gctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, 128, 128);
+  var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(glowCanvas),
+    color: 0x5b7cff,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false
+  }));
+  glow.scale.set(2.6, 2.6, 1);
+  glow.position.z = -0.2;
+  holder.add(glow);
+
+  /* ---------- pointer ---------- */
+  var pointer = { x: 0, y: 0 }, dragging = false, lastX = 0, spinOffset = 0;
+  window.addEventListener('pointermove', function (e) {
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
+    if (dragging) { spinOffset += (e.clientX - lastX) * 0.012; lastX = e.clientX; }
+  });
+  renderer.domElement.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; });
+  window.addEventListener('pointerup', function () { dragging = false; });
+  window.addEventListener('pointercancel', function () { dragging = false; });
+
+  /* ---------- voice (Python does the speaking, this page only tracks the mute button) ---------- */
+  var speaking = false, muted = false;
+  var muteBtn = document.getElementById('muteBtn');
+  muteBtn.addEventListener('click', function () {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+    post('/mute', { muted: muted }).catch(function () {});
+  });
+  function showMuted() {
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+  }
+
+  /* ---------- chat ---------- */
+  var logEl = document.getElementById('log');
+  var danceUntil = 0;
+  function addMsg(who, text) {
+    var d = document.createElement('div');
+    d.className = 'msg ' + who;
+    d.textContent = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function nova(text) { addMsg('nova', text); }
+
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function offline() {
+    addMsg('nova', 'I cannot reach my Python brain. Is nova_server.py still running?');
+  }
+  function send(text) {
+    text = text.trim();
+    if (!text) return;
+    addMsg('you', text);
+    post('/chat', { text: text }).then(function (d) {
+      addMsg('nova', d.reply);
+      if (d.dance) danceUntil = performance.now() / 1000 + 4;
+    }).catch(offline);
+  }
+  function greet() {
+    post('/greet').then(function (d) { addMsg('nova', d.reply); }).catch(offline);
+  }
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('msg');
+    send(input.value);
+    input.value = '';
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (b) {
+    b.addEventListener('click', function () { send(b.getAttribute('data-say')); });
+  });
+
+  /* ---------- listening (microphone -> Python -> Gemini) ---------- */
+  var micBtn = document.getElementById('micBtn');
+  var rec = null, recChunks = [], recStream = null, recTimer = null;
+  function micReset() {
+    micBtn.setAttribute('aria-pressed', 'false');
+    micBtn.textContent = 'Tap to talk';
+    clearTimeout(recTimer);
+    if (recStream) { recStream.getTracks().forEach(function (t) { t.stop(); }); recStream = null; }
+  }
+  function blobToB64(blob) {
+    return new Promise(function (res) {
+      var fr = new FileReader();
+      fr.onload = function () { res(String(fr.result).split(',')[1] || ''); };
+      fr.readAsDataURL(blob);
+    });
+  }
+  function stopRec() { if (rec && rec.state === 'recording') rec.stop(); }
+  micBtn.addEventListener('click', function () {
+    if (rec && rec.state === 'recording') { stopRec(); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) { nova('This browser cannot use the microphone.'); return; }
+    post('/stop').catch(function () {});
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      recStream = stream; recChunks = [];
+      rec = new MediaRecorder(stream);
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = function () {
+        var type = rec.mimeType || 'audio/webm';
+        var blob = new Blob(recChunks, { type: type });
+        micReset();
+        if (blob.size < 1500) { nova('I did not hear anything. Tap the mic and try again.'); return; }
+        addMsg('you', '...listening');
+        var mine = logEl.lastChild;
+        blobToB64(blob).then(function (b64) {
+          return post('/listen', { audio_b64: b64, mime: type.split(';')[0] });
+        }).then(function (d) {
+          if (d.error) { mine.remove(); nova(d.error); return; }
+          mine.textContent = d.heard;
+          addMsg('nova', d.reply);
+          if (d.dance) danceUntil = performance.now() / 1000 + 4;
+        }).catch(function () { mine.remove(); offline(); });
+      };
+      rec.start();
+      micBtn.setAttribute('aria-pressed', 'true');
+      micBtn.textContent = 'Listening... tap to send';
+      recTimer = setTimeout(stopRec, 15000);
+    }).catch(function () { nova('I need permission to use the microphone. Allow it in the browser and try again.'); });
+  });
+
+  /* ---------- hands-free wake word: say "Mitra, tell me a joke" ---------- */
+  var wakeBtn = document.getElementById('wakeBtn');
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var wakeOn = false, wakeRec = null, awaitUntil = 0;
+  var WAKE = /\b(mi+t+h?ra+|mee+t+ra+|metra|nova)\b[\s,.!?:-]*/i;
+  function wakeHandle(text) {
+    if (speaking) return;                       // ignore Nova's own voice
+    var now = performance.now() / 1000;
+    var m = text.match(WAKE);
+    var cmd = '';
+    if (m) {
+      cmd = text.slice(m.index + m[0].length).trim();
+      if (!cmd) { awaitUntil = now + 6; say('Yes? I am listening...'); return; }
+    } else if (now < awaitUntil) {
+      cmd = text.trim();
+    } else { return; }
+    awaitUntil = 0;
+    post('/stop').catch(function () {});
+    var c = cmd.toLowerCase();
+    if (/^(stop|be quiet|quiet|shut up)\b/.test(c)) return;
+    if (/\b(mute|voice off|be silent)\b/.test(c)) { if (!muted) muteBtn.click(); return; }
+    if (/\b(unmute|voice on|speak)\b/.test(c)) { if (muted) muteBtn.click(); return; }
+    send(cmd);
+  }
+  function wakeStart() {
+    wakeRec = new SR();
+    wakeRec.lang = 'en-IN';
+    wakeRec.continuous = true;
+    wakeRec.interimResults = false;
+    wakeRec.onresult = function (e) {
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) wakeHandle(e.results[i][0].transcript);
+      }
+    };
+    wakeRec.onerror = function (e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        wakeOn = false; wakeShow(); nova('I need microphone permission for the Nova wake word.');
+      }
+    };
+    wakeRec.onend = function () { if (wakeOn) { try { wakeRec.start(); } catch (err) {} } };
+    try { wakeRec.start(); } catch (err) {}
+  }
+  function wakeShow() {
+    wakeBtn.setAttribute('aria-pressed', String(wakeOn));
+    wakeBtn.textContent = wakeOn ? 'Hey Nova: on' : 'Hey Nova: off';
+  }
+  wakeBtn.addEventListener('click', function () {
+    if (!SR) { nova('Wake word needs Chrome or Edge. Use Tap to talk instead.'); return; }
+    wakeOn = !wakeOn;
+    wakeShow();
+    if (wakeOn) { wakeStart(); say('Say "Nova" and then your command.'); }
+    else if (wakeRec) { wakeRec.stop(); }
+  });
+
+  // turn the wake word on automatically after the first click on the page (browsers need a click for the mic)
+  if (SR) window.addEventListener('pointerdown', function auto(e) {
+    window.removeEventListener('pointerdown', auto);
+    if (!wakeOn && !(e.target.closest && e.target.closest('#wakeBtn'))) wakeBtn.click();
+  });
+
+  /* ---------- talk to the Python server ---------- */
+  var polling = false, mutedSynced = false;
+  setInterval(function () {
+    if (polling) return;
+    polling = true;
+    fetch('/status').then(function (r) { return r.json(); })
+      .then(function (d) {
+        speaking = !!d.speaking;
+        if (!mutedSynced && typeof d.muted === 'boolean') { muted = d.muted; showMuted(); mutedSynced = true; }
+      })
+      .catch(function () { speaking = false; })
+      .then(function () { polling = false; });
+  }, 300);
+
+  if (!greeted) { greeted = true; greet(); }
+
+  /* ---------- animation loop ---------- */
+  var level = 0;
+  var cIdle = new THREE.Color(0x5b7cff), cListen = new THREE.Color(0x2ee6c8), cTalk = new THREE.Color(0xffb03a);
+  var cIdle2 = new THREE.Color(0xb48cff), cListen2 = new THREE.Color(0x7dffe9), cTalk2 = new THREE.Color(0xff6b8a);
+  var hx = 0, hy = 0;
+
+  function tick() {
+    requestAnimationFrame(tick);
+    var now = performance.now() / 1000;
+    var listening = (rec && rec.state === 'recording') || now < awaitUntil;
+    var dancing = now < danceUntil;
+
+    if (!dragging) spinOffset *= 0.93;
+    holder.rotation.y = spinOffset;
+
+    // pulse: strong while talking, gentle while listening, slow breathing when idle
+    var target = speaking ? (0.25 + Math.abs(Math.sin(now * 11)) * 0.45 * (0.6 + 0.4 * Math.sin(now * 4.7)))
+               : listening ? 0.12 + 0.08 * Math.sin(now * 5)
+               : 0.04 + 0.03 * Math.sin(now * 1.5);
+    if (dancing) target = Math.max(target, 0.3 + 0.2 * Math.sin(now * 8));
+    level += (target - level) * 0.25;
+    orbUniforms.uLevel.value = level;
+    orbUniforms.uTime.value = now * (dancing ? 2.2 : 1);
+
+    // colour shows what Nova is doing: blue idle, green listening, amber talking
+    orbUniforms.uColor.value.lerp(speaking ? cTalk : listening ? cListen : cIdle, 0.08);
+    orbUniforms.uColor2.value.lerp(speaking ? cTalk2 : listening ? cListen2 : cIdle2, 0.08);
+    glow.material.color.copy(orbUniforms.uColor.value);
+    glow.scale.setScalar(2.6 + level * 1.4);
+
+    // drift toward the pointer, float, and bounce when dancing
+    hx += (pointer.x * 0.25 - hx) * 0.06;
+    hy += (pointer.y * 0.15 - hy) * 0.06;
+    holder.position.x = hx;
+    holder.position.y = hy + Math.sin(now * 1.5) * 0.03 + (dancing ? Math.abs(Math.sin(now * 6)) * 0.12 : 0);
+    orb.scale.setScalar(1 + level * 0.25);
+
+    renderer.render(scene, camera);
+  }
+  resize();
+  tick();
+})();
+</script>
+</body>
+</html>

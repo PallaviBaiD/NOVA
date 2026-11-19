@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Orb Python</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400;500;600&display=swap">
+<style>
+  /* Layout: orb on the left, conversation on the right. On a phone they stack. */
+  :root {
+    --bg: #faf9f5;
+    --fg: #1f1e1d;
+    --muted: #83827d;
+    --panel: #faf9f5;
+    --line: #e6e3d8;
+    --accent: #d97757;
+    --accent-2: #c6613f;
+    --accent-fg: #ffffff;
+    --input: #ffffff;
+    --user-bubble: #f0eee6;
+    --shadow: 0 8px 30px rgba(40, 30, 20, .08);
+    --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-read: "Source Serif 4", Georgia, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #262624;
+      --fg: #f3f1ea;
+      --muted: #9b9a94;
+      --panel: #262624;
+      --line: #3b3a37;
+      --accent: #e0846a;
+      --input: #30302e;
+      --user-bubble: #3a3936;
+      --shadow: 0 8px 30px rgba(0, 0, 0, .4);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #262624;
+    --fg: #f3f1ea;
+    --muted: #9b9a94;
+    --panel: #262624;
+    --line: #3b3a37;
+    --accent: #e0846a;
+    --input: #30302e;
+    --user-bubble: #3a3936;
+    --shadow: 0 8px 30px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 16px;
+    display: flex;
+    align-items: center;   /* keep the window centred and inside the screen */
+  }
+  .app {
+    width: 100%;
+    height: min(100%, 620px);
+    max-width: 760px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 16px;
+    min-height: 0;
+  }
+
+  /* ----- the stage (orb) ----- */
+  .stage {
+    position: relative;
+    min-height: 260px;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: radial-gradient(circle at 50% 42%, #2e3480 0%, #151843 55%, #0a0c24 100%);
+  }
+  .stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1px 1px at 78% 14%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1.5px 1.5px at 66% 78%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1px 1px at 24% 82%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1px 1px at 90% 54%, rgba(255,255,255,.4), transparent),
+      radial-gradient(1px 1px at 40% 10%, rgba(255,255,255,.3), transparent);
+    pointer-events: none;
+  }
+  .stage canvas { position: relative; display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .stage canvas:active { cursor: grabbing; }
+  .name-tag {
+    position: absolute;
+    left: 22px;
+    top: 18px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 26px;
+    color: #fff;
+    letter-spacing: 0.02em;
+    text-shadow: 0 2px 10px rgba(0,0,0,.4);
+    pointer-events: none;
+  }
+  .name-tag small {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: .7;
+  }
+  .state {
+    position: absolute;
+    right: 18px;
+    top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.12);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    pointer-events: none;
+  }
+  .state i { width: 8px; height: 8px; border-radius: 50%; background: #7fa0ff; box-shadow: 0 0 10px currentColor; }
+  .stage[data-state="listening"] .state i { background: #2ee6c8; }
+  .stage[data-state="talking"] .state i { background: #ffb03a; }
+  .status {
+    position: absolute;
+    left: 22px;
+    right: 22px;
+    bottom: 16px;
+    font-size: 12px;
+    color: #fff;
+    opacity: .85;
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0,0,0,.5);
+    pointer-events: none;
+  }
+  .fail { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: #fff; margin: 0; }
+
+  /* ----- the conversation (right side), laid out like a modern chat window ----- */
+  .panel {
+    min-height: 0;
+    min-width: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .panel-head h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+  .panel-head span { display: none; }
+  .log {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    padding: 6px 4px 6px 0;
+    scroll-behavior: smooth;
+  }
+  .log:empty::before {
+    content: "How can I help you today?";
+    margin: auto;
+    font-family: var(--font-read);
+    font-size: 26px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .msg {
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    animation: pop .22s ease-out;
+  }
+  /* Nova: plain text on the page, in a reading font */
+  .msg.nova {
+    align-self: stretch;
+    font-family: var(--font-read);
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--fg);
+    padding-left: 30px;
+    position: relative;
+  }
+  /* a written document (letter, email...) shown as a card with a Copy button */
+  .doc-card {
+    margin: 10px 0 0 30px;
+    padding: 16px 18px 12px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    font-family: var(--font-read);
+    font-size: 16px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    animation: pop .22s ease-out;
+  }
+  .img-card {
+    margin: 10px 0 0 30px;
+    padding: 12px 12px 10px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    animation: pop .22s ease-out;
+  }
+  .img-card img { display: block; width: 100%; max-height: 300px; object-fit: contain; border-radius: 10px; background: var(--user-bubble); }
+  .img-card .img-cap { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .img-card .doc-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .img-card button {
+    font: 500 12px var(--font-body);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .img-card button:hover { border-color: var(--accent); }
+  .doc-card h3 { margin: 0 0 10px; font: 600 20px/1.3 var(--font-read); }
+  .doc-card h4 { margin: 16px 0 4px; font: 600 16px/1.3 var(--font-read); }
+  .doc-card p { margin: 0 0 8px; white-space: pre-wrap; }
+  .doc-card ul { margin: 0 0 8px; padding-left: 22px; }
+  .doc-card .doc-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+  .doc-card button {
+    font: 500 12px var(--font-body);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .doc-card button:hover { border-color: var(--accent); }
+  .msg.nova::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #9aa7ff, #5b6cff 60%, #8a5bff);
+    box-shadow: 0 0 10px rgba(110, 120, 255, .5);
+  }
+  /* You: a soft bubble on the right */
+  .msg.you {
+    align-self: flex-end;
+    max-width: 80%;
+    background: var(--user-bubble);
+    color: var(--fg);
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* one rounded message box with the controls inside it */
+  .composer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 12px 10px 18px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    box-shadow: var(--shadow);
+  }
+  .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+  .composer input[type="text"] {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 16px;
+    color: var(--fg);
+    padding: 6px 0;
+  }
+  .composer input[type="text"]::placeholder { color: var(--muted); }
+  .attach-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    align-self: flex-start;
+    max-width: 100%;
+    padding: 6px 8px 6px 6px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--user-bubble);
+    font-size: 13px;
+  }
+  .attach-chip img { width: 38px; height: 38px; object-fit: cover; border-radius: 9px; }
+  .attach-chip .ico { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; background: var(--line); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .attach-chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+  .attach-chip button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; }
+  .attach-chip button:hover { color: var(--fg); }
+  .msg.you .shot { display: block; max-width: 100%; max-height: 220px; border-radius: 12px; margin-bottom: 8px; }
+  .msg.you .fileline { display: inline-block; font-size: 13px; opacity: .85; margin-bottom: 6px; }
+  .icon-btn {
+    width: 36px; height: 36px; display: grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 50%; background: transparent;
+    color: var(--fg); cursor: pointer; flex: 0 0 auto;
+  }
+  .icon-btn:hover { border-color: var(--accent); }
+  .icon-btn svg { width: 18px; height: 18px; }
+  .composer { position: relative; }
+  .tpl-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    z-index: 5;
+  }
+  .tpl-head { padding: 8px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .tpl-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+  }
+  .tpl-item:hover, .tpl-item:focus-visible { background: var(--user-bubble); outline: none; }
+  .tpl-item b { display: block; font-size: 14px; font-weight: 600; }
+  .tpl-item span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .panel.drop { outline: 3px dashed var(--accent); outline-offset: -8px; }
+  .composer-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .spacer { flex: 1 1 auto; }
+  .tool {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 10px;
+    white-space: nowrap;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s;
+  }
+  .tool::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .tool:hover { border-color: var(--accent); }
+  .tool:active { transform: scale(.98); }
+  #micBtn[aria-pressed="false"]::before { background: var(--accent); }
+  #micBtn[aria-pressed="true"] { border-color: #ff5c7a; }
+  #micBtn[aria-pressed="true"]::before { background: #ff5c7a; animation: blink 1s infinite; }
+  #muteBtn[aria-pressed="false"]::before { background: #2ecf9a; }
+  #muteBtn[aria-pressed="true"]::before { background: #ff5c7a; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .send {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+  }
+  .send:hover { background: var(--accent-2); }
+  .send:active { transform: scale(.95); }
+  .send svg { width: 18px; height: 18px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ----- phones and narrow windows: stack them ----- */
+  @media (max-width: 640px) {
+    body { padding-block: 12px; }
+    .app { display: flex; flex-direction: column; gap: 12px; height: 100%; max-width: 560px; }
+    .stage { flex: 1 1 auto; min-height: 220px; border-radius: 24px; }
+    .panel { flex: 0 0 auto; border-radius: 24px; padding: 14px; }
+    .log { flex: none; height: 200px; }
+    .name-tag { font-size: 22px; left: 16px; top: 14px; }
+    .state { right: 12px; top: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .msg { animation: none; } .stage canvas { cursor: default; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="name-tag">Nova<small>Your AI friend</small></div>
+    <div class="state"><i></i><span id="stateLbl">Ready</span></div>
+    <div class="status" id="status"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h1>Nova</h1></div>
+    <div class="log" id="log" aria-live="polite"></div>
+    <form id="form" class="composer" autocomplete="off">
+      <div class="tpl-menu" id="tplMenu" hidden></div>
+      <div class="attach-chip" id="attachChip" hidden></div>
+      <input type="text" id="msg" placeholder="Message Nova" aria-label="Message to Nova">
+      <input type="file" id="attachFile" hidden accept="image/*,.pdf,.txt,.md,.csv,.tsv,.json,.log,.py,.js,.html,.css,.xml,.yml,.yaml,.ini,.sql">
+      <div class="composer-row">
+        <button class="icon-btn" id="attachBtn" type="button" aria-label="Add an image or file" title="Add an image or file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.2-8.2"/></svg>
+        </button>
+        <button class="icon-btn" id="tplBtn" type="button" aria-label="Chat templates" aria-expanded="false" title="Chat templates">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+        </button>
+        <button class="tool" id="micBtn" type="button" aria-pressed="false">Tap to talk</button>
+        <button class="tool" id="muteBtn" type="button" aria-pressed="false">Voice on</button>
+        <span class="spacer"></span>
+        <button class="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var statusEl = document.getElementById('status');
+  if (typeof THREE === 'undefined') {
+    stage.insertAdjacentHTML('beforeend', '<p class="fail">The 3D tools could not load. Check your internet connection and reload the page.</p>');
+    return;
+  }
+
+  /* ---------- scene ---------- */
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f78, 0.9));
+  var key = new THREE.DirectionalLight(0xfff1dc, 1.0);
+  key.position.set(1.5, 2.5, 3);
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0xbcd0ff, 0.4);
+  rim.position.set(-2, 1.5, -2);
+  scene.add(rim);
+
+  var holder = new THREE.Group();   // spins when dragged
+  scene.add(holder);
+
+  var greeted = false;
+  var focus = { y: 0, viewH: 2.6 };
+
+  /* ---------- sizing and framing ---------- */
+  function placeCamera() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    var halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    var distH = focus.viewH / (2 * halfTan);
+    var distW = (focus.viewH * 0.85) / (2 * halfTan * camera.aspect);   // always fit the orb's full width
+    var dist = Math.max(distH, distW);
+    camera.position.set(0, focus.y, dist);
+    camera.lookAt(0, focus.y, 0);
+    camera.near = dist / 50;
+    camera.far = dist * 50;
+    camera.updateProjectionMatrix();
+  }
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    placeCamera();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+
+  /* ---------- status line ---------- */
+  var sayTimer = null;
+  function say(msg) {
+    statusEl.textContent = msg;
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(function () { statusEl.textContent = ''; }, 6000);
+  }
+
+  /* ---------- the orb ---------- */
+  var orbUniforms = {
+    uTime: { value: 0 },
+    uLevel: { value: 0 },
+    uColor: { value: new THREE.Color(0x5b7cff) },
+    uColor2: { value: new THREE.Color(0xb48cff) }
+  };
+  var orb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 96, 96),
+    new THREE.ShaderMaterial({
+      uniforms: orbUniforms,
+      vertexShader: [
+        'uniform float uTime; uniform float uLevel;',
+        'varying vec3 vN; varying vec3 vV;',
+        'void main() {',
+        '  vec3 p = position;',
+        '  float d = sin(p.x * 3.0 + uTime * 1.5) * sin(p.y * 3.0 + uTime * 1.2) * sin(p.z * 3.0 + uTime * 1.8);',
+        '  p += normal * d * (0.05 + uLevel * 0.22);',
+        '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+        '  vN = normalize(normalMatrix * normal);',
+        '  vV = normalize(-mv.xyz);',
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor; uniform vec3 uColor2; uniform float uLevel; uniform float uTime;',
+        'varying vec3 vN; varying vec3 vV;',
+        'void main() {',
+        '  float f = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 2.0);',
+        '  float swirl = 0.5 + 0.5 * sin(vN.y * 5.0 + vN.x * 3.0 + uTime * 1.3);',
+        '  vec3 col = mix(uColor, uColor2, swirl * 0.6 + f * 0.6);',
+        '  col = col * (0.75 + 0.35 * uLevel) + mix(uColor2, vec3(1.0), 0.35) * f * (0.25 + 0.3 * uLevel);',
+        '  gl_FragColor = vec4(col, 1.0);',
+        '}'
+      ].join('\n')
+    })
+  );
+  holder.add(orb);
+
+  // soft glow behind the orb
+  var glowCanvas = document.createElement('canvas');
+  glowCanvas.width = glowCanvas.height = 128;
+  var gctx = glowCanvas.getContext('2d');
+  var grad = gctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, 128, 128);
+  var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(glowCanvas),
+    color: 0x5b7cff,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false
+  }));
+  glow.scale.set(2.6, 2.6, 1);
+  glow.position.z = -0.2;
+  holder.add(glow);
+
+  /* ---------- pointer ---------- */
+  var pointer = { x: 0, y: 0 }, dragging = false, lastX = 0, spinOffset = 0;
+  window.addEventListener('pointermove', function (e) {
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
+    if (dragging) { spinOffset += (e.clientX - lastX) * 0.012; lastX = e.clientX; }
+  });
+  renderer.domElement.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; });
+  window.addEventListener('pointerup', function () { dragging = false; });
+  window.addEventListener('pointercancel', function () { dragging = false; });
+
+  /* ---------- voice (Python does the speaking, this page only tracks the mute button) ---------- */
+  var speaking = false, muted = false, browserSpeaking = false;
+  var muteBtn = document.getElementById('muteBtn');
+  muteBtn.addEventListener('click', function () {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+    post('/mute', { muted: muted }).catch(function () {});
+  });
+  // languages the PC voice cannot speak are spoken by the browser's own voices (Edge and Chrome have many)
+  function speakBrowser(text, lang) {
+    if (muted || !('speechSynthesis' in window)) return;
+    try {
+      var synth = window.speechSynthesis;
+      synth.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      var base = (lang || 'en').toLowerCase().split(/[-_]/)[0];
+      var vs = synth.getVoices(), pick = null;
+      for (var i = 0; i < vs.length && !pick; i++) if (vs[i].lang.toLowerCase().replace('_', '-') === (lang || '').toLowerCase()) pick = vs[i];
+      for (var j = 0; j < vs.length && !pick; j++) if (vs[j].lang.toLowerCase().split(/[-_]/)[0] === base) pick = vs[j];
+      if (pick) u.voice = pick;
+      u.lang = pick ? pick.lang : (lang || 'en');
+      u.onstart = function () { browserSpeaking = true; speaking = true; };
+      u.onend = u.onerror = function () { browserSpeaking = false; speaking = false; };
+      synth.speak(u);
+    } catch (err) { browserSpeaking = false; }
+  }
+  if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
+  /* ---------- written documents: shown as a card, can be copied or downloaded ---------- */
+  // "# Title", "## Heading" and "- bullet" lines are formatted; everything else is plain text
+  function parseDoc(text) {
+    var out = [];
+    String(text).split(/\r?\n/).forEach(function (line) {
+      var m;
+      if ((m = line.match(/^#\s+(.*)$/))) out.push({ k: 'h1', t: m[1] });
+      else if ((m = line.match(/^#{2,}\s+(.*)$/))) out.push({ k: 'h2', t: m[1] });
+      else if ((m = line.match(/^\s*[-*\u2022]\s+(.*)$/))) out.push({ k: 'li', t: m[1] });
+      else if (line.trim() === '') out.push({ k: 'gap', t: '' });
+      else out.push({ k: 'p', t: line });
+    });
+    return out;
+  }
+  function plainDoc(items) {
+    return items.map(function (i) { return i.k === 'li' ? '\u2022 ' + i.t : i.t; }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function docName(items) {
+    var first = items.filter(function (i) { return i.t.trim(); })[0];
+    var base = (first ? first.t : 'nova-document').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 40);
+    return base || 'nova-document';
+  }
+  function saveBlob(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function docHtml(items, forWord) {
+    function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    var h = '', inList = false;
+    items.forEach(function (i) {
+      if (i.k !== 'li' && inList) { h += '</ul>'; inList = false; }
+      if (i.k === 'h1') h += '<h1>' + esc(i.t) + '</h1>';
+      else if (i.k === 'h2') h += '<h2>' + esc(i.t) + '</h2>';
+      else if (i.k === 'li') { if (!inList) { h += '<ul>'; inList = true; } h += '<li>' + esc(i.t) + '</li>'; }
+      else if (i.k === 'p') h += '<p>' + esc(i.t) + '</p>';
+    });
+    if (inList) h += '</ul>';
+    return '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(docName(items)) + '</title>' +
+      '<style>body{font-family:Georgia,serif;font-size:12pt;line-height:1.5;margin:32px;color:#111}h1{font-size:20pt}h2{font-size:14pt;margin-top:18px}p{margin:0 0 8px}</style>' +
+      '</head><body>' + h + '</body></html>';
+  }
+  function downloadPdf(items) {
+    var plain = plainDoc(items);
+    var latin = !/[^\u0000-\u00FF\u2018-\u201F\u2013\u2014\u2022\u2026\u20B9\u20AC]/.test(plain);
+    var lib = window.jspdf && window.jspdf.jsPDF;
+    if (!lib || !latin) {                    // other scripts (Hindi, Arabic...) need the browser's own fonts: use Save as PDF
+      var f = document.createElement('iframe');
+      f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      document.body.appendChild(f);
+      f.contentDocument.open(); f.contentDocument.write(docHtml(items)); f.contentDocument.close();
+      setTimeout(function () { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(function () { f.remove(); }, 1500); }, 300);
+      say('In the print window, choose "Save as PDF".');
+      return;
+    }
+    var pdf = new lib({ unit: 'mm', format: 'a4' });
+    var W = 210, M = 20, maxW = W - 2 * M, y = M;
+    function ensure(h) { if (y + h > 297 - M) { pdf.addPage(); y = M; } }
+    items.forEach(function (i) {
+      if (i.k === 'gap') { y += 3; return; }
+      var size = i.k === 'h1' ? 18 : i.k === 'h2' ? 13 : 11;
+      pdf.setFont('helvetica', (i.k === 'h1' || i.k === 'h2') ? 'bold' : 'normal');
+      pdf.setFontSize(size);
+      var text = i.k === 'li' ? '\u2022 ' + i.t : i.t;
+      var lh = size * 0.5;
+      if (i.k === 'h2') y += 3;
+      pdf.splitTextToSize(text, maxW - (i.k === 'li' ? 4 : 0)).forEach(function (ln, n) {
+        ensure(lh);
+        pdf.text(ln, M + (i.k === 'li' && n > 0 ? 4 : 0), y);
+        y += lh;
+      });
+      y += i.k === 'h1' ? 3 : 1;
+    });
+    pdf.save(docName(items) + '.pdf');
+  }
+  function addDocument(text) {
+    var items = parseDoc(text);
+    var card = document.createElement('div');
+    card.className = 'doc-card';
+    var body = document.createElement('div');
+    var list = null;
+    items.forEach(function (i) {
+      if (i.k !== 'li') list = null;
+      var el;
+      if (i.k === 'h1') { el = document.createElement('h3'); el.textContent = i.t; body.appendChild(el); }
+      else if (i.k === 'h2') { el = document.createElement('h4'); el.textContent = i.t; body.appendChild(el); }
+      else if (i.k === 'li') {
+        if (!list) { list = document.createElement('ul'); body.appendChild(list); }
+        el = document.createElement('li'); el.textContent = i.t; list.appendChild(el);
+      } else if (i.k === 'p') { el = document.createElement('p'); el.textContent = i.t; body.appendChild(el); }
+    });
+    var bar = document.createElement('div');
+    bar.className = 'doc-bar';
+    function mk(label, fn) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.addEventListener('click', function () { fn(b); });
+      bar.appendChild(b);
+    }
+    mk('Copy', function (btn) {
+      var plain = plainDoc(items);
+      function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(plain).then(done, function () {});
+      else {
+        var ta = document.createElement('textarea');
+        ta.value = plain; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        ta.remove();
+      }
+    });
+    mk('PDF', function () { downloadPdf(items); });
+    mk('Word', function () { saveBlob(new Blob(['\ufeff' + docHtml(items, true)], { type: 'application/msword' }), docName(items) + '.doc'); });
+    mk('Text', function () { saveBlob(new Blob([plainDoc(items)], { type: 'text/plain;charset=utf-8' }), docName(items) + '.txt'); });
+    card.appendChild(body);
+    card.appendChild(bar);
+    logEl.appendChild(card);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  /* ---------- pictures Nova creates (flags and drawings) ---------- */
+  function b64ToBlob(b64, mime) {
+    var bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+  function svgToPng(svg, done) {
+    var img = new Image();
+    img.onload = function () {
+      var w = 1600, h = Math.round(w * ((img.naturalHeight || 500) / (img.naturalWidth || 800)));
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      cv.toBlob(function (b) { if (b) done(b); }, 'image/png');
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+  function addImage(im) {
+    var base = (im.name || 'image').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 40) || 'image';
+    var src = im.b64 ? 'data:' + im.mime + ';base64,' + im.b64 : 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(im.svg);
+    var card = document.createElement('div');
+    card.className = 'img-card';
+    var img = document.createElement('img');
+    img.alt = im.name || 'image';
+    img.src = src;
+    var cap = document.createElement('div');
+    cap.className = 'img-cap';
+    cap.textContent = im.name || '';
+    var bar = document.createElement('div');
+    bar.className = 'doc-bar';
+    function mk(label, fn) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = label;
+      b.addEventListener('click', fn);
+      bar.appendChild(b);
+    }
+    var ext = /jpe?g/.test(im.mime) ? 'jpg' : /webp/.test(im.mime) ? 'webp' : 'png';
+    if (im.b64) mk(ext.toUpperCase(), function () { saveBlob(b64ToBlob(im.b64, im.mime), base + '.' + ext); });
+    else mk('PNG', function () { svgToPng(im.svg, function (b) { saveBlob(b, base + '.png'); }); });
+    if (im.svg) mk('SVG', function () { saveBlob(new Blob([im.svg], { type: 'image/svg+xml' }), base + '.svg'); });
+    card.appendChild(img); card.appendChild(cap); card.appendChild(bar);
+    logEl.appendChild(card);
+    img.addEventListener('load', function () { logEl.scrollTop = logEl.scrollHeight; });
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function showReply(d) {
+    addMsg('nova', d.reply);
+    if (d.document) addDocument(d.document);
+    if (d.image) addImage(d.image);
+    if (d.browser_voice) speakBrowser(d.reply, d.lang);
+  }
+  function showMuted() {
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+  }
+
+  /* ---------- chat ---------- */
+  var logEl = document.getElementById('log');
+  function addMsg(who, text) {
+    var d = document.createElement('div');
+    d.className = 'msg ' + who;
+    d.textContent = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function nova(text) { addMsg('nova', text); }
+
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function offline() {
+    addMsg('nova', 'I cannot reach my Python brain. Is nova_server.py still running?');
+  }
+  /* ---------- adding an image or file ---------- */
+  var attachBtn = document.getElementById('attachBtn');
+  var attachFile = document.getElementById('attachFile');
+  var attachChip = document.getElementById('attachChip');
+  var pending = null;                       // { name, mime, b64, preview }
+  var MAX_BYTES = 7 * 1024 * 1024;
+  function showChip() {
+    attachChip.innerHTML = '';
+    if (!pending) { attachChip.hidden = true; return; }
+    var lead;
+    if (pending.preview) { lead = document.createElement('img'); lead.src = pending.preview; lead.alt = ''; }
+    else { lead = document.createElement('span'); lead.className = 'ico'; lead.textContent = (pending.name.split('.').pop() || 'file').slice(0, 4); }
+    var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = pending.name;
+    var x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Remove file'); x.textContent = '\u00d7';
+    x.addEventListener('click', function () { pending = null; attachFile.value = ''; showChip(); });
+    attachChip.appendChild(lead); attachChip.appendChild(nm); attachChip.appendChild(x);
+    attachChip.hidden = false;
+  }
+  function takeFile(file) {
+    if (!file) return;
+    if (file.size > MAX_BYTES) { nova('That file is too big. Please use one under 7 megabytes.'); return; }
+    var fr = new FileReader();
+    fr.onerror = function () { nova('I could not read that file. Try again.'); };
+    fr.onload = function () {
+      var url = String(fr.result);
+      var mime = file.type || (url.slice(5, url.indexOf(';')) || '');
+      pending = { name: file.name || 'pasted-image.png', mime: mime, b64: url.split(',')[1] || '',
+                  preview: mime.indexOf('image/') === 0 ? url : '' };
+      showChip();
+      document.getElementById('msg').focus();
+    };
+    fr.readAsDataURL(file);
+  }
+  attachBtn.addEventListener('click', function () { attachFile.value = ''; attachFile.click(); });
+  attachFile.addEventListener('change', function () { takeFile(attachFile.files[0]); });
+  document.getElementById('msg').addEventListener('paste', function (e) {
+    var items = (e.clipboardData && e.clipboardData.files) || [];
+    if (items.length) { e.preventDefault(); takeFile(items[0]); }
+  });
+  var panelEl = document.querySelector('.panel');
+  panelEl.addEventListener('dragover', function (e) { e.preventDefault(); panelEl.classList.add('drop'); });
+  panelEl.addEventListener('dragleave', function (e) { if (!panelEl.contains(e.relatedTarget)) panelEl.classList.remove('drop'); });
+  panelEl.addEventListener('drop', function (e) {
+    e.preventDefault(); panelEl.classList.remove('drop');
+    if (e.dataTransfer && e.dataTransfer.files.length) takeFile(e.dataTransfer.files[0]);
+  });
+
+  /* ---------- chat templates: tap one to fill the message box, edit the [brackets], then send ---------- */
+  var TEMPLATES = [
+    ['Sick leave email', 'Email to my manager', 'Write a sick leave email to my manager for [today]. My name is [your name].'],
+    ['Casual leave request', 'Leave for a few days', 'Write a leave request email to my manager for [dates] because of [reason]. My name is [your name].'],
+    ['Plan my day', 'Saves a routine with reminders', 'Plan my day. I wake up at [5:45], office is [9 to 6] on weekdays. Add [morning routine, lunch, evening walk].'],
+    ['Meeting follow-up', 'Thank and recap', 'Write a short follow-up email after my meeting about [topic] with [name], listing the next steps: [steps].'],
+    ['Thank-you note', 'Short and warm', 'Write a short thank-you note to [name] for [reason].'],
+    ['Create a flag', 'Any country, download as PNG', 'Create the flag of [country].'],
+    ['Create an image', 'A new picture from your words', 'Create an image of [a cute robot reading a book under a tree, watercolor style].'],
+    ['Make a report', 'From an attached file', 'Make a report from the attached file with a title, a short summary, key points and a conclusion.'],
+    ['Summarize a file', 'Attach it first, then send', 'Please summarize the attached file in simple points.'],
+    ['Explain simply', 'In easy words', 'Explain [topic] in simple words, like I am a beginner.'],
+    ['Translate', 'Into another language', 'Translate this into [Hindi]: [text]'],
+    ['Weather', 'Live data', 'What is the weather in [city]?'],
+    ['News', 'Live headlines', 'Tell me the latest news.']
+  ];
+  var tplBtn = document.getElementById('tplBtn');
+  var tplMenu = document.getElementById('tplMenu');
+  function closeTpl() { tplMenu.hidden = true; tplBtn.setAttribute('aria-expanded', 'false'); }
+  function useTemplate(text) {
+    var input = document.getElementById('msg');
+    input.value = text;
+    closeTpl();
+    input.focus();
+    var m = text.match(/\[[^\]]*\]/);                 // select the first [placeholder] so you can type over it
+    if (m) input.setSelectionRange(m.index, m.index + m[0].length);
+  }
+  (function buildTemplates() {
+    var head = document.createElement('div');
+    head.className = 'tpl-head';
+    head.textContent = 'Chat templates';
+    tplMenu.appendChild(head);
+    TEMPLATES.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tpl-item';
+      var title = document.createElement('b'); title.textContent = t[0];
+      var sub = document.createElement('span'); sub.textContent = t[1];
+      b.appendChild(title); b.appendChild(sub);
+      b.addEventListener('click', function () { useTemplate(t[2]); });
+      tplMenu.appendChild(b);
+    });
+  })();
+  tplBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = tplMenu.hidden;
+    tplMenu.hidden = !open;
+    tplBtn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', function (e) { if (!tplMenu.hidden && !tplMenu.contains(e.target)) closeTpl(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTpl(); });
+
+  function send(text) {
+    text = text.trim();
+    if (!text && !pending) return;
+    var att = pending; pending = null; attachFile.value = ''; showChip();
+    var d = document.createElement('div');
+    d.className = 'msg you';
+    if (att && att.preview) { var im = document.createElement('img'); im.className = 'shot'; im.src = att.preview; im.alt = att.name; d.appendChild(im); }
+    else if (att) { var fl = document.createElement('span'); fl.className = 'fileline'; fl.textContent = att.name; d.appendChild(fl); d.appendChild(document.createElement('br')); }
+    if (text) d.appendChild(document.createTextNode(text));
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+    post('/chat', { text: text, attachment: att ? { name: att.name, mime: att.mime, b64: att.b64 } : null }).then(function (r) {
+      showReply(r);
+    }).catch(offline);
+  }
+  function greet() {
+    post('/greet').then(function (d) { addMsg('nova', d.reply); }).catch(offline);
+  }
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('msg');
+    send(input.value);
+    input.value = '';
+  });
+  /* ---------- listening (microphone -> Python -> Gemini) ---------- */
+  var micBtn = document.getElementById('micBtn');
+  var rec = null, recChunks = [], recStream = null, recTimer = null;
+  function micReset() {
+    micBtn.setAttribute('aria-pressed', 'false');
+    micBtn.textContent = 'Tap to talk';
+    clearTimeout(recTimer);
+    if (recStream) { recStream.getTracks().forEach(function (t) { t.stop(); }); recStream = null; }
+  }
+  function blobToB64(blob) {
+    return new Promise(function (res) {
+      var fr = new FileReader();
+      fr.onload = function () { res(String(fr.result).split(',')[1] || ''); };
+      fr.readAsDataURL(blob);
+    });
+  }
+  function stopRec() { if (rec && rec.state === 'recording') rec.stop(); }
+  micBtn.addEventListener('click', function () {
+    if (rec && rec.state === 'recording') { stopRec(); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) { nova('This browser cannot use the microphone.'); return; }
+    post('/stop').catch(function () {}); try { window.speechSynthesis.cancel(); } catch (e) {}
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      recStream = stream; recChunks = [];
+      rec = new MediaRecorder(stream);
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = function () {
+        var type = rec.mimeType || 'audio/webm';
+        var blob = new Blob(recChunks, { type: type });
+        micReset();
+        if (blob.size < 1500) { nova('I did not hear anything. Tap the mic and try again.'); return; }
+        addMsg('you', '...listening');
+        var mine = logEl.lastChild;
+        blobToB64(blob).then(function (b64) {
+          return post('/listen', { audio_b64: b64, mime: type.split(';')[0] });
+        }).then(function (d) {
+          if (d.error) { mine.remove(); nova(d.error); return; }
+          mine.textContent = d.heard;
+          showReply(d);
+        }).catch(function () { mine.remove(); offline(); });
+      };
+      rec.start();
+      micBtn.setAttribute('aria-pressed', 'true');
+      micBtn.textContent = 'Listening... tap to send';
+      recTimer = setTimeout(stopRec, 15000);
+    }).catch(function () { nova('I need permission to use the microphone. Allow it in the browser and try again.'); });
+  });
+
+  var awaitUntil = 0;
+
+  /* ---------- talk to the Python server ---------- */
+  var polling = false, mutedSynced = false;
+  setInterval(function () {
+    if (polling) return;
+    polling = true;
+    fetch('/status').then(function (r) { return r.json(); })
+      .then(function (d) {
+        speaking = !!d.speaking || browserSpeaking;
+        (d.notices || []).forEach(function (n) { showReply(n); });
+        if (!mutedSynced && typeof d.muted === 'boolean') { muted = d.muted; showMuted(); mutedSynced = true; }
+      })
+      .catch(function () { speaking = browserSpeaking; })
+      .then(function () { polling = false; });
+  }, 300);
+
+  if (!greeted) { greeted = true; greet(); }
+
+  /* ---------- animation loop ---------- */
+  var level = 0, lastState = '';
+  var stateLbl = document.getElementById('stateLbl');
+  var cIdle = new THREE.Color(0x5b7cff), cListen = new THREE.Color(0x2ee6c8), cTalk = new THREE.Color(0xffb03a);
+  var cIdle2 = new THREE.Color(0xb48cff), cListen2 = new THREE.Color(0x7dffe9), cTalk2 = new THREE.Color(0xff6b8a);
+  var hx = 0, hy = 0;
+
+  function tick() {
+    requestAnimationFrame(tick);
+    var now = performance.now() / 1000;
+    var listening = (rec && rec.state === 'recording') || now < awaitUntil;
+
+    if (!dragging) spinOffset *= 0.93;
+    holder.rotation.y = spinOffset;
+
+    // pulse: strong while talking, gentle while listening, slow breathing when idle
+    var target = speaking ? (0.25 + Math.abs(Math.sin(now * 11)) * 0.45 * (0.6 + 0.4 * Math.sin(now * 4.7)))
+               : listening ? 0.12 + 0.08 * Math.sin(now * 5)
+               : 0.04 + 0.03 * Math.sin(now * 1.5);
+    level += (target - level) * 0.25;
+    orbUniforms.uLevel.value = level;
+    orbUniforms.uTime.value = now;
+
+    var st = speaking ? 'talking' : listening ? 'listening' : 'idle';
+    if (st !== lastState) {
+      lastState = st;
+      stage.setAttribute('data-state', st);
+      stateLbl.textContent = st === 'talking' ? 'Speaking' : st === 'listening' ? 'Listening' : 'Ready';
+    }
+
+    // colour shows what Nova is doing: blue idle, green listening, amber talking
+    orbUniforms.uColor.value.lerp(speaking ? cTalk : listening ? cListen : cIdle, 0.08);
+    orbUniforms.uColor2.value.lerp(speaking ? cTalk2 : listening ? cListen2 : cIdle2, 0.08);
+    glow.material.color.copy(orbUniforms.uColor.value);
+    glow.scale.setScalar(2.6 + level * 1.4);
+
+    // drift toward the pointer, and float
+    hx += (pointer.x * 0.25 - hx) * 0.06;
+    hy += (pointer.y * 0.15 - hy) * 0.06;
+    holder.position.x = hx;
+    holder.position.y = hy + Math.sin(now * 1.5) * 0.03;
+    orb.scale.setScalar(1 + level * 0.25);
+
+    renderer.render(scene, camera);
+  }
+  resize();
+  tick();
+})();
+</script>
+</body>
+</html>

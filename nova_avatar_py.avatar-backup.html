@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova Avatar Python</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one screen. A dark 3D stage on top, chat underneath. The avatar file is chosen by the viewer. */
+  :root {
+    --bg: #f3efea;
+    --fg: #2a2522;
+    --muted: #6f6760;
+    --panel: #fffdfa;
+    --line: #ddd5cc;
+    --accent: #d99a2b;
+    --accent-fg: #2a1d08;
+    --link: #8a5a00;
+    --stage-a: #7d736c;
+    --stage-b: #443d39;
+    --bubble-nova: #ece5dc;
+    --bubble-you: #d99a2b;
+    --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1d1a18;
+      --fg: #f1ebe4;
+      --muted: #a39a91;
+      --panel: #2a2623;
+      --line: #3e3833;
+      --accent: #e5a93a;
+      --accent-fg: #2a1d08;
+      --link: #f0c36a;
+      --stage-a: #6b625b;
+      --stage-b: #35302d;
+      --bubble-nova: #38322e;
+      --bubble-you: #e5a93a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1d1a18;
+    --fg: #f1ebe4;
+    --muted: #a39a91;
+    --panel: #2a2623;
+    --line: #3e3833;
+    --accent: #e5a93a;
+    --accent-fg: #2a1d08;
+    --link: #f0c36a;
+    --stage-a: #6b625b;
+    --stage-b: #35302d;
+    --bubble-nova: #38322e;
+    --bubble-you: #e5a93a;
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; margin: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+    box-sizing: border-box;
+  }
+  .app {
+    height: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+  .stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 220px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 30%, var(--stage-a), var(--stage-b));
+  }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .stage canvas:active { cursor: grabbing; }
+  .stage.drop { outline: 3px dashed var(--accent); outline-offset: -8px; }
+  .name-tag {
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    color: #fff;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 6px rgba(0,0,0,.35);
+    pointer-events: none;
+  }
+  .name-tag small {
+    display: block;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: .75;
+  }
+  .status {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    font-size: 12px;
+    color: #fff;
+    opacity: .85;
+    text-shadow: 0 1px 4px rgba(0,0,0,.45);
+    pointer-events: none;
+  }
+  .pick {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #fff;
+    background: rgba(20, 16, 14, .35);
+  }
+  .pick p { margin: 0; max-width: 34ch; line-height: 1.45; font-size: 14px; }
+  .pick a { color: var(--link); background: #fff; padding: 0 4px; border-radius: 4px; text-decoration: none; font-weight: 600; }
+  .pick button {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 600;
+    padding: 13px 24px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+  }
+  .fail { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: #fff; margin: 0; }
+
+  .panel {
+    flex: 0 0 auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+  .log { height: 104px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+  .msg { max-width: 88%; padding: 7px 11px; border-radius: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+  .msg.nova { background: var(--bubble-nova); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.you { background: var(--bubble-you); color: var(--accent-fg); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip, .tool {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .chip:hover, .tool:hover { border-color: var(--accent); }
+  .tool { color: var(--muted); }
+  .tool[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+  .spacer { flex: 1 1 auto; }
+  form { display: flex; gap: 8px; }
+  input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .send {
+    font: inherit;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 0;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .stage canvas { cursor: default; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="name-tag">Nova<small>Your AI friend</small></div>
+    <div class="status" id="status"></div>
+    <div class="pick" id="pick">
+      <p>Put a file named avatar.glb next to nova_server.py and restart, or choose a .glb file here.</p>
+      <button id="pickBtn" type="button">Choose avatar file</button>
+      <p>No file yet? Make one with a free avatar maker such as
+        <a href="https://avatarsdk.com/avatar-maker/" target="_blank" rel="noopener">MetaPerson</a> or
+        <a href="https://similarlabs.com/p/avaturn" target="_blank" rel="noopener">Avaturn</a>.</p>
+    </div>
+    <input type="file" id="file" accept=".glb,model/gltf-binary" hidden>
+  </div>
+  <div class="panel">
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="chips">
+      <button class="chip" type="button" data-say="Tell me a joke">Tell a joke</button>
+      <button class="chip" type="button" data-say="Give me a space fact">Space fact</button>
+      <button class="chip" type="button" data-say="Dance">Dance</button>
+      <span class="spacer"></span>
+      <button class="tool" id="micBtn" type="button" aria-pressed="false">Tap to talk</button>
+      <button class="tool" id="wakeBtn" type="button" aria-pressed="false">Hey Nova: off</button>
+      <button class="tool" id="viewBtn" type="button" aria-pressed="false">Face view</button>
+      <button class="tool" id="muteBtn" type="button" aria-pressed="false">Voice on</button>
+      <button class="tool" id="newBtn" type="button">New avatar</button>
+    </div>
+    <form id="form" autocomplete="off">
+      <input type="text" id="msg" placeholder="Say something to Nova" aria-label="Message to Nova">
+      <button class="send" type="submit">Send</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var statusEl = document.getElementById('status');
+  if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader === 'undefined') {
+    stage.insertAdjacentHTML('beforeend', '<p class="fail">The 3D tools could not load. Check your internet connection and reload the page.</p>');
+    return;
+  }
+
+  /* ---------- scene ---------- */
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f78, 0.9));
+  var key = new THREE.DirectionalLight(0xfff1dc, 1.0);
+  key.position.set(1.5, 2.5, 3);
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0xbcd0ff, 0.4);
+  rim.position.set(-2, 1.5, -2);
+  scene.add(rim);
+
+  var holder = new THREE.Group();   // spins when dragged
+  scene.add(holder);
+
+  var greeted = false;
+  var avatar = null, faceBox = null, headBone = null, headBase = null;
+  var mouthMorphs = [], blinkMorphs = [], smileMorphs = [], morphMeshes = [];
+  var focus = { y: 1.55, viewH: 0.5 }, fullBody = false, bodyBox = null;
+
+  /* ---------- sizing and framing ---------- */
+  function placeCamera() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    var halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    var distH = focus.viewH / (2 * halfTan);
+    var distW = (focus.viewH * 0.62) / (2 * halfTan * camera.aspect);
+    var dist = Math.max(distH, distW);
+    camera.position.set(0, focus.y, dist);
+    camera.lookAt(0, focus.y, 0);
+    camera.near = dist / 50;
+    camera.far = dist * 50;
+    camera.updateProjectionMatrix();
+  }
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    placeCamera();
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+
+  function frame() {
+    if (!avatar || !bodyBox) { focus = { y: 1.4, viewH: 2 }; placeCamera(); return; }
+    var size = bodyBox.getSize(new THREE.Vector3());
+    if (fullBody) {
+      focus = { y: bodyBox.min.y + size.y / 2, viewH: size.y * 1.15 };
+    } else if (faceBox) {
+      var fs = faceBox.getSize(new THREE.Vector3());
+      var fc = faceBox.getCenter(new THREE.Vector3());
+      focus = { y: fc.y, viewH: Math.max(fs.y * 1.9, size.y * 0.16) };
+    } else {
+      focus = { y: bodyBox.max.y - size.y * 0.13, viewH: size.y * 0.3 };
+    }
+    placeCamera();
+  }
+
+  /* ---------- loading an avatar ---------- */
+  var sayTimer = null;
+  function say(msg) {
+    statusEl.textContent = msg;
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(function () { statusEl.textContent = ''; }, 6000);
+  }
+
+  function clearAvatar() {
+    if (avatar) {
+      holder.remove(avatar);
+      avatar.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          var ms = Array.isArray(o.material) ? o.material : [o.material];
+          ms.forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
+        }
+      });
+    }
+    avatar = null; faceBox = null; headBone = null; bodyBox = null;
+    mouthMorphs = []; blinkMorphs = []; smileMorphs = []; morphMeshes = [];
+  }
+
+  var MOUTH = ['jawOpen', 'mouthOpen', 'viseme_aa', 'aa', 'A', 'vrc.v_aa', 'Mouth_Open'];
+  var BLINK = ['eyeBlinkLeft', 'eyeBlinkRight', 'eyesClosed', 'blink', 'Blink', 'blink_L', 'blink_R', 'Blink_L', 'Blink_R'];
+  var SMILE = ['mouthSmile', 'mouthSmileLeft', 'mouthSmileRight'];
+
+  function setupAvatar(gltf, fileName) {
+    clearAvatar();
+    avatar = gltf.scene;
+
+    // stand the avatar on the floor, 1.7 units tall, centered
+    avatar.updateMatrixWorld(true);
+    var box = new THREE.Box3().setFromObject(avatar);
+    var size = box.getSize(new THREE.Vector3());
+    var s = size.y > 0 ? 1.7 / size.y : 1;
+    avatar.scale.multiplyScalar(s);
+    avatar.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(avatar);
+    var c = box.getCenter(new THREE.Vector3());
+    avatar.position.x -= c.x;
+    avatar.position.z -= c.z;
+    avatar.position.y -= box.min.y;
+    holder.add(avatar);
+    avatar.updateMatrixWorld(true);
+    bodyBox = new THREE.Box3().setFromObject(avatar);
+
+    var faceMesh = null;
+    avatar.traverse(function (o) {
+      if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false;
+      if (o.isBone && !headBone && /head$/i.test(o.name) && !/top|end|headtop/i.test(o.name)) {
+        headBone = o;
+        headBase = { x: o.rotation.x, y: o.rotation.y, z: o.rotation.z };
+      }
+      if (o.morphTargetDictionary && o.morphTargetInfluences) {
+        morphMeshes.push(o);
+        var d = o.morphTargetDictionary;
+        MOUTH.forEach(function (n) { if (d[n] !== undefined) { mouthMorphs.push({ mesh: o, i: d[n], k: n }); if (!faceMesh) faceMesh = o; } });
+        BLINK.forEach(function (n) { if (d[n] !== undefined) blinkMorphs.push({ mesh: o, i: d[n] }); });
+        SMILE.forEach(function (n) { if (d[n] !== undefined) smileMorphs.push({ mesh: o, i: d[n] }); });
+      }
+    });
+
+    // frame on the head mesh when it is separate from the body
+    faceBox = null;
+    if (faceMesh) {
+      var fb = new THREE.Box3().setFromObject(faceMesh);
+      if (fb.getSize(new THREE.Vector3()).y < bodyBox.getSize(new THREE.Vector3()).y * 0.6) faceBox = fb;
+    }
+    if (!faceBox && headBone) {
+      var hp = new THREE.Vector3();
+      headBone.getWorldPosition(hp);
+      faceBox = new THREE.Box3(
+        new THREE.Vector3(hp.x - 0.12, hp.y - 0.05, hp.z - 0.12),
+        new THREE.Vector3(hp.x + 0.12, hp.y + 0.22, hp.z + 0.12)
+      );
+    }
+
+    frame();
+    document.getElementById('pick').hidden = true;
+    if (mouthMorphs.length) {
+      say('Loaded ' + fileName + '. Face shapes found, so Nova can move the mouth.');
+    } else {
+      say('Loaded ' + fileName + '. This avatar has no talking face shapes, so Nova will only nod while talking.');
+    }
+    holder.rotation.y = 0;
+    if (!greeted) { greeted = true; greet(); }
+  }
+
+  var loader = new THREE.GLTFLoader();
+  function loadFile(file) {
+    if (!file) return;
+    if (!/\.glb$/i.test(file.name)) { say('Please choose a .glb file.'); return; }
+    say('Loading ' + file.name + '...');
+    var reader = new FileReader();
+    reader.onerror = function () { say('The file could not be read. Try choosing it again.'); };
+    reader.onload = function () {
+      try {
+        loader.parse(reader.result, '', function (gltf) { setupAvatar(gltf, file.name); }, function (err) {
+          say('This file could not be opened. It may use compression this page cannot read. Export it again without compression.' + (err && err.message ? ' (' + err.message + ')' : ''));
+        });
+      } catch (e) {
+        say('This file could not be opened: ' + e.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  var fileInput = document.getElementById('file');
+  document.getElementById('pickBtn').addEventListener('click', function () { fileInput.click(); });
+  document.getElementById('newBtn').addEventListener('click', function () { fileInput.value = ''; fileInput.click(); });
+  fileInput.addEventListener('change', function () { loadFile(fileInput.files[0]); });
+  stage.addEventListener('dragover', function (e) { e.preventDefault(); stage.classList.add('drop'); });
+  stage.addEventListener('dragleave', function (e) { if (!stage.contains(e.relatedTarget)) stage.classList.remove('drop'); });
+  stage.addEventListener('drop', function (e) {
+    e.preventDefault();
+    stage.classList.remove('drop');
+    if (e.dataTransfer && e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+
+  var viewBtn = document.getElementById('viewBtn');
+  viewBtn.addEventListener('click', function () {
+    fullBody = !fullBody;
+    viewBtn.setAttribute('aria-pressed', String(fullBody));
+    viewBtn.textContent = fullBody ? 'Full body' : 'Face view';
+    frame();
+  });
+
+  /* ---------- pointer ---------- */
+  var pointer = { x: 0, y: 0 }, dragging = false, lastX = 0, spinOffset = 0;
+  window.addEventListener('pointermove', function (e) {
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
+    if (dragging) { spinOffset += (e.clientX - lastX) * 0.012; lastX = e.clientX; }
+  });
+  renderer.domElement.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; });
+  window.addEventListener('pointerup', function () { dragging = false; });
+  window.addEventListener('pointercancel', function () { dragging = false; });
+
+  /* ---------- voice (Python does the speaking, this page only tracks the mute button) ---------- */
+  var speaking = false, muted = false;
+  var muteBtn = document.getElementById('muteBtn');
+  muteBtn.addEventListener('click', function () {
+    muted = !muted;
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+    post('/mute', { muted: muted }).catch(function () {});
+  });
+  function showMuted() {
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    muteBtn.textContent = muted ? 'Voice off' : 'Voice on';
+  }
+
+  /* ---------- chat ---------- */
+  var logEl = document.getElementById('log');
+  var danceUntil = 0;
+  function addMsg(who, text) {
+    var d = document.createElement('div');
+    d.className = 'msg ' + who;
+    d.textContent = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function nova(text) { addMsg('nova', text); }
+
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+  function offline() {
+    addMsg('nova', 'I cannot reach my Python brain. Is nova_server.py still running?');
+  }
+  function send(text) {
+    text = text.trim();
+    if (!text) return;
+    addMsg('you', text);
+    post('/chat', { text: text }).then(function (d) {
+      addMsg('nova', d.reply);
+      if (d.dance) danceUntil = performance.now() / 1000 + 4;
+    }).catch(offline);
+  }
+  function greet() {
+    post('/greet').then(function (d) { addMsg('nova', d.reply); }).catch(offline);
+  }
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = document.getElementById('msg');
+    send(input.value);
+    input.value = '';
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (b) {
+    b.addEventListener('click', function () { send(b.getAttribute('data-say')); });
+  });
+
+  /* ---------- listening (microphone -> Python -> Gemini) ---------- */
+  var micBtn = document.getElementById('micBtn');
+  var rec = null, recChunks = [], recStream = null, recTimer = null;
+  function micReset() {
+    micBtn.setAttribute('aria-pressed', 'false');
+    micBtn.textContent = 'Tap to talk';
+    clearTimeout(recTimer);
+    if (recStream) { recStream.getTracks().forEach(function (t) { t.stop(); }); recStream = null; }
+  }
+  function blobToB64(blob) {
+    return new Promise(function (res) {
+      var fr = new FileReader();
+      fr.onload = function () { res(String(fr.result).split(',')[1] || ''); };
+      fr.readAsDataURL(blob);
+    });
+  }
+  function stopRec() { if (rec && rec.state === 'recording') rec.stop(); }
+  micBtn.addEventListener('click', function () {
+    if (rec && rec.state === 'recording') { stopRec(); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) { nova('This browser cannot use the microphone.'); return; }
+    post('/stop').catch(function () {});
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      recStream = stream; recChunks = [];
+      rec = new MediaRecorder(stream);
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = function () {
+        var type = rec.mimeType || 'audio/webm';
+        var blob = new Blob(recChunks, { type: type });
+        micReset();
+        if (blob.size < 1500) { nova('I did not hear anything. Tap the mic and try again.'); return; }
+        addMsg('you', '...listening');
+        var mine = logEl.lastChild;
+        blobToB64(blob).then(function (b64) {
+          return post('/listen', { audio_b64: b64, mime: type.split(';')[0] });
+        }).then(function (d) {
+          if (d.error) { mine.remove(); nova(d.error); return; }
+          mine.textContent = d.heard;
+          addMsg('nova', d.reply);
+          if (d.dance) danceUntil = performance.now() / 1000 + 4;
+        }).catch(function () { mine.remove(); offline(); });
+      };
+      rec.start();
+      micBtn.setAttribute('aria-pressed', 'true');
+      micBtn.textContent = 'Listening... tap to send';
+      recTimer = setTimeout(stopRec, 15000);
+    }).catch(function () { nova('I need permission to use the microphone. Allow it in the browser and try again.'); });
+  });
+
+  /* ---------- hands-free wake word: say "Mitra, tell me a joke" ---------- */
+  var wakeBtn = document.getElementById('wakeBtn');
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var wakeOn = false, wakeRec = null, awaitUntil = 0;
+  var WAKE = /\b(mi+t+h?ra+|mee+t+ra+|metra|nova)\b[\s,.!?:-]*/i;
+  function wakeHandle(text) {
+    if (speaking) return;                       // ignore Nova's own voice
+    var now = performance.now() / 1000;
+    var m = text.match(WAKE);
+    var cmd = '';
+    if (m) {
+      cmd = text.slice(m.index + m[0].length).trim();
+      if (!cmd) { awaitUntil = now + 6; say('Yes? I am listening...'); return; }
+    } else if (now < awaitUntil) {
+      cmd = text.trim();
+    } else { return; }
+    awaitUntil = 0;
+    post('/stop').catch(function () {});
+    var c = cmd.toLowerCase();
+    if (/^(stop|be quiet|quiet|shut up)/.test(c)) return;
+    if (/(mute|voice off|be silent)/.test(c)) { if (!muted) muteBtn.click(); return; }
+    if (/(unmute|voice on|speak)/.test(c)) { if (muted) muteBtn.click(); return; }
+    if (/full body/.test(c)) { if (!fullBody) viewBtn.click(); return; }
+    if (/face( view)?/.test(c)) { if (fullBody) viewBtn.click(); return; }
+    send(cmd);
+  }
+  function wakeStart() {
+    wakeRec = new SR();
+    wakeRec.lang = 'en-IN';
+    wakeRec.continuous = true;
+    wakeRec.interimResults = false;
+    wakeRec.onresult = function (e) {
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) wakeHandle(e.results[i][0].transcript);
+      }
+    };
+    wakeRec.onerror = function (e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        wakeOn = false; wakeShow(); nova('I need microphone permission for the Nova wake word.');
+      }
+    };
+    wakeRec.onend = function () { if (wakeOn) { try { wakeRec.start(); } catch (err) {} } };
+    try { wakeRec.start(); } catch (err) {}
+  }
+  function wakeShow() {
+    wakeBtn.setAttribute('aria-pressed', String(wakeOn));
+    wakeBtn.textContent = wakeOn ? 'Hey Nova: on' : 'Hey Nova: off';
+  }
+  wakeBtn.addEventListener('click', function () {
+    if (!SR) { nova('Wake word needs Chrome or Edge. Use Tap to talk instead.'); return; }
+    wakeOn = !wakeOn;
+    wakeShow();
+    if (wakeOn) { wakeStart(); say('Say "Nova" and then your command.'); }
+    else if (wakeRec) { wakeRec.stop(); }
+  });
+
+  // turn the wake word on automatically after the first click on the page (browsers need a click for the mic)
+  if (SR) window.addEventListener('pointerdown', function auto(e) {
+    window.removeEventListener('pointerdown', auto);
+    if (!wakeOn && !(e.target.closest && e.target.closest('#wakeBtn'))) wakeBtn.click();
+  });
+
+  /* ---------- talk to the Python server ---------- */
+  var polling = false, mutedSynced = false;
+  setInterval(function () {
+    if (polling) return;
+    polling = true;
+    fetch('/status').then(function (r) { return r.json(); })
+      .then(function (d) {
+        speaking = !!d.speaking;
+        if (!mutedSynced && typeof d.muted === 'boolean') { muted = d.muted; showMuted(); mutedSynced = true; }
+      })
+      .catch(function () { speaking = false; })
+      .then(function () { polling = false; });
+  }, 300);
+
+  function loadBuffer(buf, name) {
+    try {
+      loader.parse(buf, '', function (gltf) { setupAvatar(gltf, name); }, function (err) {
+        say('This file could not be opened. It may use compression this page cannot read.' + (err && err.message ? ' (' + err.message + ')' : ''));
+      });
+    } catch (e) { say('This file could not be opened: ' + e.message); }
+  }
+  fetch('/avatar.glb').then(function (r) {
+    if (!r.ok) throw new Error('none');
+    say('Loading avatar.glb...');
+    return r.arrayBuffer();
+  }).then(function (buf) { loadBuffer(buf, 'avatar.glb'); }).catch(function () {});
+
+  /* ---------- animation loop ---------- */
+  var nextBlink = performance.now() / 1000 + 2, blinkStart = -10;
+  var mouthLevel = 0, headY = 0, headX = 0;
+
+  function setAll(list, v) {
+    for (var i = 0; i < list.length; i++) list[i].mesh.morphTargetInfluences[list[i].i] = v;
+  }
+
+  function tick() {
+    requestAnimationFrame(tick);
+    var now = performance.now() / 1000;
+
+    if (!dragging) spinOffset *= 0.93;
+    holder.rotation.y = spinOffset;
+
+    if (avatar) {
+      // idle breathing and dance
+      holder.position.y = Math.sin(now * 1.5) * 0.004;
+      holder.rotation.z = 0;
+      if (now < danceUntil) {
+        holder.rotation.z = Math.sin(now * 6) * 0.03;
+        holder.position.y += Math.abs(Math.sin(now * 6)) * 0.03;
+      }
+
+      // head follows the pointer
+      headY += (pointer.x * 0.35 - headY) * 0.08;
+      headX += (-pointer.y * 0.2 - headX) * 0.08;
+      var nod = (speaking && !mouthMorphs.length) ? Math.sin(now * 9) * 0.05 : 0;
+      if (headBone && headBase) {
+        headBone.rotation.y = headBase.y + headY;
+        headBone.rotation.x = headBase.x + headX + nod;
+      }
+
+      // talking mouth
+      var target = speaking ? (0.12 + Math.abs(Math.sin(now * 13)) * 0.5 * (0.6 + 0.4 * Math.sin(now * 5.1))) : 0;
+      mouthLevel += (target - mouthLevel) * 0.35;
+      for (var i = 0; i < mouthMorphs.length; i++) {
+        var mm = mouthMorphs[i];
+        mm.mesh.morphTargetInfluences[mm.i] = mm.k === 'jawOpen' ? mouthLevel * 0.8 : mouthLevel;
+      }
+      setAll(smileMorphs, speaking ? 0.15 : 0.25);
+
+      // blinking
+      if (now > nextBlink) { blinkStart = now; nextBlink = now + 2.5 + Math.random() * 3; }
+      var bt = (now - blinkStart) / 0.18;
+      setAll(blinkMorphs, bt < 1 ? Math.sin(bt * Math.PI) : 0);
+    }
+
+    renderer.render(scene, camera);
+  }
+  resize();
+  tick();
+})();
+</script>
+</body>
+</html>

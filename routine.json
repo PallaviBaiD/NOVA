@@ -1,0 +1,23 @@
+[
+  {
+    "time": "05:45",
+    "title": "Morning Routine",
+    "steps": [
+      "Freshen up",
+      "Drink water",
+      "Meditation",
+      "10 minutes stretching"
+    ],
+    "days": "daily",
+    "lang": "en"
+  },
+  {
+    "time": "09:00",
+    "title": "Office",
+    "steps": [
+      "Work at office"
+    ],
+    "days": "weekdays",
+    "lang": "en"
+  }
+]
